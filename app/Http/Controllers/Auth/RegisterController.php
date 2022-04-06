@@ -3,11 +3,16 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
+use App\Models\Jobseeker;
+use App\Models\Role;
 use App\Providers\RouteServiceProvider;
 use App\Models\User;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 
 class RegisterController extends Controller
 {
@@ -53,6 +58,8 @@ class RegisterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'phone_no' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9|max:10',
+            'role'=>['required'],
         ]);
     }
 
@@ -64,10 +71,33 @@ class RegisterController extends Controller
      */
     protected function create(array $data)
     {
-        return User::create([
+        DB::beginTransaction();
+        $role=Role::where('name',$data['role'])->where('name','!=','Admin')->first();
+        throw_if(empty($role),BadRequestException::class,'Given Role Does\'nt Exist');
+        $user=User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
+            'role_id'=>$role->id,
+            'status'=>1
         ]);
+        if ($data['role']=='Employer') 
+        {
+        $company=Company::create([
+            'user_id' => $user->id,
+            'company_name' => $data['company_name'],
+            'phone_no' => $data['phone_no']
+        ]);
+        }
+        elseif ($data['role']=='Job Seeker') 
+        {
+            $jobseeker=Jobseeker::create([
+                'user_id' => $user->id,
+                'fullname'=> $data['name'],
+                'phone_no' => $data['phone_no']
+            ]);
+        }
+        DB::commit();
+        return $user;
     }
 }
